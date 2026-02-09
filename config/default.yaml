@@ -1,0 +1,20 @@
+# Semantic Graph Memory — default configuration
+# Override via CONFIG_PATH env or --config in CLI.
+
+# Modules to instrument at runtime (opt-in)
+track_modules: []
+track_variables: []
+
+# Query agent limits
+traversal:
+  max_depth: 5
+  max_nodes: 100
+
+# Graph storage
+graph:
+  persist_path: ".graph.json"
+
+# LLM (optional for MVP)
+llm:
+  provider: "openai"
+  model: "gpt-4o-mini"

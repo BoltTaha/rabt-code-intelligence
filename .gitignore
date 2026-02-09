@@ -1,0 +1,54 @@
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Node / React Native / Expo
+node_modules/
+.expo/
+.expo-shared/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Generated graph (re-run pipeline to recreate)
+.graph.json
+
+# Logs and temp
+*.log
+tmp/
+temp/
+.cache/
+
+# Local DB (if any)
+*.db
+*.sqlite
+*.sqlite3
