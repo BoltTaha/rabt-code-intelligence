@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rabt"
+version = "0.1.0"
+description = "Semantic Graph Memory for Code Intelligence"
+readme = "docs/README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+  {name = "Muhammad Taha", email = "bolt.taha.work@gmail.com"}
+]
+keywords = ["graph-rag", "code-analysis", "llm", "devtools"]
+dependencies = [
+  "networkx>=3.0",
+  "pyyaml>=6.0",
+  "python-dotenv>=1.0.0",
+  "google-genai>=1.0.0",
+  "matplotlib>=3.7",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.0",
+  "pytest-cov>=4.0",
+  "build",
+  "twine"
+]
+
+[project.scripts]
+# This allows users to run 'rabt' from the command line
+rabt = "run_pipeline:main"
+
+[tool.setuptools.packages.find]
+include = ["core*", "parser*", "graph*", "agent*", "llm*", "runtime*", "evaluation*"]
+

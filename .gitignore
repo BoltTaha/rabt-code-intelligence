@@ -1,4 +1,4 @@
-# Environment and secrets
+# Environment and secrets (never commit; .env is for your local API key only)
 .env
 .env.local
 .env.*.local
@@ -41,6 +41,10 @@ Thumbs.db
 
 # Generated graph (re-run pipeline to recreate)
 .graph.json
+graph.png
+
+# Runtime instrumentation log (Phase 2)
+.runtime_events.jsonl
 
 # Logs and temp
 *.log
@@ -52,3 +56,4 @@ temp/
 *.db
 *.sqlite
 *.sqlite3
+examples/requests_repo/

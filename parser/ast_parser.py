@@ -21,9 +21,14 @@ def _node_id(module: str, kind: str, name: str) -> str:
     return f"{module}::{kind}::{name}"
 
 
-def parse_path(repo_path: str | None) -> ParserOutput:
+def parse_path(
+    repo_path: str | None,
+    whitelist_files: List[str] | None = None,
+) -> ParserOutput:
     """
-    Parse all Python files under repo_path and return a single ParserOutput.
+    Parse Python files under repo_path and return a single ParserOutput.
+    - If whitelist_files is provided, only those files (paths relative to repo_path) are parsed (incremental mode).
+    - Otherwise all .py files under repo_path are parsed (full scan).
     repo_path can be a directory or a single .py file. Returns empty output if None.
     """
     if repo_path is None:
@@ -32,7 +37,13 @@ def parse_path(repo_path: str | None) -> ParserOutput:
     if not path.exists():
         return ParserOutput(nodes=[], edges=[])
 
-    if path.is_file():
+    if whitelist_files is not None:
+        files = []
+        for f in whitelist_files:
+            fp = path / f
+            if fp.exists() and fp.is_file() and fp.suffix == ".py":
+                files.append(fp)
+    elif path.is_file():
         files = [path] if path.suffix == ".py" else []
     else:
         files = [
@@ -71,8 +82,11 @@ def _parse_module(source: str, module_name: str, filepath: str) -> ParserOutput:
     nodes: List[Node] = []
     edges: List[Edge] = []
     current_class: str | None = None
-    # Map local name -> (target_module, target_name) for imported names
-    imports_map: dict[str, tuple[str, str]] = {}
+    # Map local name -> (target_module, target_name | None) for imported names
+    # - For "from x import foo as bar": imports_map['bar'] = ('full.x', 'foo')
+    # - For "import x as y": imports_map['y'] = ('x', None)
+    # - For "import x": imports_map['x'] = ('x', None)
+    imports_map: dict[str, tuple[str, str | None]] = {}
 
     # Module node
     mod_id = _node_id(module_name, "module", module_name)
@@ -178,9 +192,17 @@ def _parse_module(source: str, module_name: str, filepath: str) -> ParserOutput:
 
         def visit_Import(self, node: ast.Import) -> None:
             for alias in node.names:
+                # Keep existing IMPORTS edge semantics (module-level)
                 target_mod = alias.asname or alias.name
                 target_id = _node_id(target_mod, "module", target_mod)
                 edges.append(Edge(mod_id, target_id, EdgeType.IMPORTS, 1.0))
+
+                # Track aliases so we can resolve calls like "np.array()" later.
+                # alias.name is the fully qualified module (e.g. "numpy"),
+                # alias.asname is the local alias (e.g. "np").
+                # If there is no alias, we still register the base name.
+                local_name = alias.asname or alias.name.split(".", 1)[0]
+                imports_map[local_name] = (alias.name, None)
             self.generic_visit(node)
 
         def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
@@ -213,8 +235,13 @@ def _resolve_call_target(
         return _node_id(module_name, "function", func.id)
     if isinstance(func, ast.Attribute):
         if isinstance(func.value, ast.Name):
-            # module.func -> use module as defining module
-            return _node_id(func.value.id, "function", func.attr)
+            base = func.value.id
+            # Handle aliased imports: import numpy as np; np.array()
+            if base in imports_map:
+                target_module, _ = imports_map[base]
+                return _node_id(target_module, "function", func.attr)
+            # Fallback: treat the base name as the module
+            return _node_id(base, "function", func.attr)
         if isinstance(func.value, ast.Attribute):
             return _node_id(module_name, "function", func.attr)
     return None

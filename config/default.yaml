@@ -5,16 +5,28 @@
 track_modules: []
 track_variables: []
 
+# When sample_repo/main.py is run as __main__, map to this module for runtime edges
+runtime:
+  main_module: "examples.sample_repo.main"
+
 # Query agent limits
 traversal:
   max_depth: 5
   max_nodes: 100
 
+# Intent routing (regex = deterministic, llm = classifier, auto = llm if available)
+intent:
+  router: "auto"
+  # Optional override for intent model; defaults to llm.model when unset
+  model: ""
+
 # Graph storage
 graph:
   persist_path: ".graph.json"
 
-# LLM (optional for MVP)
+# LLM: set GEMINI_API_KEY in environment to enable real answers
 llm:
-  provider: "openai"
-  model: "gpt-4o-mini"
+  provider: "gemini"
+  # Free tier: gemini-2.5-flash-lite (20 RPD) vs gemini-2.5-flash / gemini-2.0-flash (separate quotas)
+  # Switch model if one hits quota; each model has its own daily limit per project
+  model: "gemini-2.5-flash"

@@ -1,6 +1,12 @@
 """
 Data handling: validation and update. Modifies userData.
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
+
+from runtime.tracer import track_mutation
 
 # Global state (tracked variable for "Where is userData modified?")
 userData: dict = {}
@@ -15,6 +21,7 @@ def update_user(data: dict) -> None:
     """Update global userData (modification)."""
     global userData
     userData = data
+    track_mutation(variable_name="userData", source="update_user")
 
 
 def get_user_data() -> dict:

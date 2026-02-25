@@ -8,7 +8,8 @@ import networkx as nx
 def subgraph_to_text(G: nx.DiGraph) -> str:
     """
     Convert subgraph to a readable text representation.
-    One line per edge: "source_name edge_type target_name"
+    One line per edge: "source_name edge_type target_name" with optional impact (weight).
+    When weight > 1, shows execution count so the LLM sees importance of the path.
     """
     if G is None or G.number_of_nodes() == 0:
         return "(empty subgraph)"
@@ -18,7 +19,15 @@ def subgraph_to_text(G: nx.DiGraph) -> str:
         u_name = G.nodes[u].get("name", u)
         v_name = G.nodes[v].get("name", v)
         edge_type = attrs.get("edge_type", "CALLS")
-        lines.append(f"{u_name} {edge_type} {v_name}")
+        weight = attrs.get("weight", 1)
+        try:
+            w = float(weight)
+        except (TypeError, ValueError):
+            w = 1
+        if w > 1:
+            lines.append(f"{u_name} {edge_type} {v_name} (executed {int(w)} times)")
+        else:
+            lines.append(f"{u_name} {edge_type} {v_name}")
 
     if not lines:
         # Only isolated nodes (include module so same name in different modules stay distinct)
