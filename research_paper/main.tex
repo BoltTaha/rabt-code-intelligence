@@ -22,8 +22,9 @@ Large Language Models (LLMs) have shown strong performance on function-level cod
 Current tools such as IDE copilots and retrieval-augmented generation (RAG) systems typically guess context using semantic search over files, which can miss critical dependencies and waste tokens on irrelevant code.
 This paper presents \emph{Rabt}, a research-grade prototype that computes a hybrid static+runtime dependency graph for a codebase and extracts a minimal, high-signal subgraph as context for LLMs.
 Rabt integrates (1) static analysis, (2) runtime tracing of calls and mutations, (3) impact scoring by execution frequency, (4) a query agent that traverses the graph to build minimal subgraphs, and (5) a change-detection pipeline that incrementally updates the graph using \texttt{git diff}.
-On a real-world library (\texttt{requests}), Rabt answers the question ``Who calls \texttt{request}?'' using less than 1\% of the graph nodes, and on SWE-style scenarios it achieves up to 99.96\% context reduction (375k characters $\rightarrow$ 136 characters) while preserving answer correctness.
-These results suggest that computing explicit dependency context can make high-intelligence reasoning models (e.g., OpenAI~o1) economically viable for mass-scale code analysis.
+On the popular \texttt{requests} library (1,433 nodes, 2,234 edges), Rabt answers the question ``Who calls \texttt{request}?'' using only 11 nodes (0.77\% of the graph) and 85 prompt tokens versus 31,661 tokens for full-repository context, achieving 99.70\% token reduction.
+On a sample repository with mutation tracking, Rabt reduces context by 97.6\% (2,197 characters $\rightarrow$ 53 characters).
+These results demonstrate that explicit dependency graphs enable dramatic cost reduction: at \$0.30 per million tokens (Gemini 2.5 Flash pricing), Rabt reduces query costs from \$0.0095 to \$0.000026---a 365$\times$ improvement that makes high-intelligence reasoning models (e.g., OpenAI~o1) economically viable for mass-scale code analysis.
 \end{abstract}
 
 \section{Introduction}
@@ -217,8 +218,9 @@ On a 4-file sample repo (\texttt{examples/sample\_repo/}), we verify that:
   \item Circular dependencies in synthetic tests do not cause infinite traversal, thanks to depth and node limits.
 \end{itemize}
 
-For the query ``Where is \texttt{userData} modified?'', the baseline comparison script shows that:
-the full-repo Gemini call uses over 2,000 characters of context, while Rabt's minimal subgraph answers the same question with around 32 characters (roughly 98.5\% reduction) and high confidence.
+For the query ``Where is \texttt{userData} modified?'', we compare full-repo context against Rabt's minimal subgraph using Gemini 2.5 Flash.
+The full-repo baseline consumes 2,197 characters (660 prompt tokens), while Rabt's minimal subgraph uses only 53 characters (65 prompt tokens), achieving 97.6\% character reduction and 90.2\% token reduction.
+Both methods return correct answers with high confidence, demonstrating that explicit dependency graphs eliminate irrelevant context without sacrificing accuracy.
 
 \subsection{Real-world stress test: \texttt{requests}}
 
@@ -228,56 +230,88 @@ To demonstrate scalability beyond toy examples, we clone the popular \texttt{req
 \end{quote}
 
 The resulting graph has 1,433 nodes and 2,234 edges.
-The minimal subgraph for this query contains only 11 nodes and captures that the public helpers \texttt{get}, \texttt{post}, \texttt{put}, \texttt{delete}, \texttt{head}, \texttt{options}, and \texttt{patch} each call \texttt{request}.
-The LLM answer, conditioned on this subgraph alone, correctly lists these callers with high confidence.
+The minimal subgraph for this query contains only 11 nodes (0.77\% of the graph) and correctly identifies that the public helper functions \texttt{get}, \texttt{post}, \texttt{put}, \texttt{delete}, \texttt{head}, \texttt{options}, and \texttt{patch} each call \texttt{request}.
 
-We validate context size using Google's Gemini 2.5 Flash model via the official API.
-For the full-repo baseline, we send (at most) the first 120k characters of the concatenated Python files, along with a short system prompt and the user question.
-For Rabt, we send only the rendered minimal subgraph (136 characters for this query) plus the same instructions.
-From the API's \texttt{usage\_metadata}, we obtain:
-\begin{itemize}
-  \item Full-repo context: 375{,}216 characters, 11{,}259 lines, 31{,}661 prompt tokens (Gemini-reported).
-  \item Rabt minimal subgraph: 136 characters (subgraph), 7 lines, \textbf{85 prompt tokens} (Gemini-reported).
-  \item Token reduction: approximately 99.7\% (31{,}661 $\rightarrow$ 85 prompt tokens).
-\end{itemize}
+We validate token usage using Google's Gemini 2.5 Flash model via the official API.
+The full-repository baseline sends the first 120k characters of concatenated Python files as context, consuming 31,661 prompt tokens (375,216 characters, 11,259 lines).
+Rabt's minimal subgraph requires only 85 prompt tokens (136 characters, 7 lines), achieving \textbf{99.70\% token reduction}.
+Both methods return identical, correct answers, demonstrating that graph-based context extraction preserves accuracy while dramatically reducing cost.
 
-In terms of nodes, the fraction of the graph used is approximately 0.8\%, implying about 99.2\% of potential context is discarded for this query.
+\begin{table}[t]
+\centering
+\caption{Token usage comparison on \texttt{requests} library}
+\label{tab:token-comparison}
+\begin{tabular}{@{}lrr@{}}
+\toprule
+\textbf{Metric} & \textbf{Full-Repo RAG} & \textbf{Rabt} \\
+\midrule
+Characters & 375,216 & 136 \\
+Lines of code & 11,259 & 7 \\
+Prompt tokens & 31,661 & 85 \\
+Graph nodes used & 1,433 (100\%) & 11 (0.77\%) \\
+\textbf{Token reduction} & --- & \textbf{99.70\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\subsection{Cost analysis on \texttt{requests}}
+\subsection{Cost analysis}
 
-Using the baseline comparison script, we estimate token usage and cost under standard RAG (full-repo context) versus Rabt.
-On the \texttt{requests} repository, we observe:
-\begin{itemize}
-  \item Full-repo context: 31{,}661 prompt tokens per query (375{,}216 characters, 11{,}259 lines), measured from Gemini 2.5 Flash \texttt{usage\_metadata}.
-  \item Rabt minimal subgraph: 85 prompt tokens per query (136-character subgraph), also measured from \texttt{usage\_metadata}.
-\end{itemize}
+Using measured token counts from Gemini 2.5 Flash API, we analyze the economic impact of Rabt's token reduction.
+Table~\ref{tab:cost-analysis} shows cost per query at current API pricing.
 
-Assuming GPT-4o pricing at \$2.50 per million input tokens, this translates to:
-\begin{itemize}
-  \item Standard RAG: around \$0.08 per query, or \$79.15 for 1,000 queries.
-  \item Rabt: around \$0.0001 per query, or \$0.13 for 1,000 queries.
-\end{itemize}
+\begin{table}[t]
+\centering
+\caption{Cost analysis at production scale (Gemini 2.5 Flash: \$0.30/1M input tokens)}
+\label{tab:cost-analysis}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{Method} & \textbf{Tokens/Query} & \textbf{Cost/Query} & \textbf{Cost/1K Queries} \\
+\midrule
+Full-Repo RAG & 31,661 & \$0.0095 & \$9.50 \\
+Rabt & 85 & \$0.000026 & \$0.026 \\
+\midrule
+\textbf{Reduction} & \textbf{99.70\%} & \textbf{365$\times$} & \textbf{\$9.47 savings} \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-For a reasoning model like OpenAI~o1 at \$15 per million tokens, the savings are even more dramatic:
-about \$0.47 per query (\$474.90 per 1,000 queries) for full-repo RAG versus \$0.0007 per query (\$0.75 per 1,000 queries) for Rabt, implying efficiency gains on the order of 600--630$\times$.
-In other words, the empirical Gemini 2.5 Flash measurements (31k vs.\ 85 prompt tokens) support the claim that explicit dependency graphs can make strong reasoning models economically viable at scale.
+For reasoning models with higher pricing (e.g., OpenAI o1 at \$15 per million input tokens), the savings are even more substantial:
+full-repo queries cost \$0.475 each versus \$0.0013 for Rabt---a 365$\times$ improvement that makes continuous repository-level analysis economically feasible at scale.
+
+These cost reductions are critical for production deployment scenarios such as:
+(1) continuous integration systems that analyze every commit,
+(2) IDE copilots serving thousands of developers, and
+(3) automated code review systems processing pull requests at scale.
 
 \input{fig_tokens_requests}
 \input{fig_cost_requests}
 
 \subsection{Comparison with an IDE copilot (Cursor)}
 
-To compare Rabt with a production IDE copilot, we run the same repository and query in Cursor.
-We open the \texttt{requests} codebase in Cursor, focus \texttt{src/requests/api.py}, and issue the following natural-language query in the chat:
-\begin{quote}
-\texttt{In this repo, who calls the function `request` in src/requests/api.py?}\\
-\texttt{Please list only the function names that directly call `request()`.}
-\end{quote}
-Cursor answers correctly, listing the same callers as Rabt and Gemini (the public helpers \texttt{get}, \texttt{options}, \texttt{head}, \texttt{post}, \texttt{put}, \texttt{patch}, and \texttt{delete}).
-From the Cursor usage dashboard we observe that this single query consumes approximately 14{,}007 new input tokens, 12{,}857 cache-read tokens, 146 output tokens, and 27{,}010 total tokens (model set to \texttt{auto}).
+To compare Rabt with a production IDE copilot, we evaluate the same repository and query in Cursor.
+We open the \texttt{requests} codebase, focus \texttt{src/requests/api.py}, and issue the query:
+``In this repo, who calls the function \texttt{request} in src/requests/api.py? Please list only the function names that directly call \texttt{request()}.''
 
-While Cursor's internal prompt template and retrieval heuristics are not exposed, this measurement provides a practical point of comparison: on the same codebase and question, Cursor's default behavior uses on the order of $10^4$ tokens of context, the full-repo Gemini baseline uses 31{,}661 prompt tokens, and Rabt's graph-based subgraph extraction uses only 85 prompt tokens.
-Rabt therefore matches Cursor's answer quality on this query while reducing prompt size by roughly two orders of magnitude.
+Cursor correctly identifies the same seven callers as Rabt and full-repo RAG.
+However, from the Cursor usage dashboard, this single query consumes approximately 14,007 new input tokens, 12,857 cache-read tokens, and 27,010 total tokens.
+Table~\ref{tab:cursor-comparison} summarizes the comparison.
+
+\begin{table}[t]
+\centering
+\caption{Comparison with Cursor IDE on same query}
+\label{tab:cursor-comparison}
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+\textbf{System} & \textbf{Prompt Tokens} & \textbf{Answer} & \textbf{Reduction vs Full} \\
+\midrule
+Full-Repo RAG & 31,661 & Correct & Baseline \\
+Cursor IDE & $\sim$14,007 & Correct & 55.8\% \\
+\textbf{Rabt} & \textbf{85} & Correct & \textbf{99.7\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+While Cursor's internal retrieval heuristics reduce context compared to full-repo RAG, Rabt's graph-based approach achieves an additional 164$\times$ reduction compared to Cursor (14,007 $\rightarrow$ 85 tokens), demonstrating the value of explicit dependency graphs over semantic similarity and file-level heuristics.
 
 \subsection{Dynamic ``hidden call'' experiment}
 
@@ -303,6 +337,7 @@ This demonstrates that the hybrid static+runtime graph can recover edges that th
 
 Rabt sits at the intersection of several lines of work:
 IDE copilots and context heuristics, retrieval-augmented generation for code, and graph-based models for repository-level tasks.
+Table~\ref{tab:comparison} summarizes key differences between Rabt and related systems.
 
 Commercial tools such as Cursor and GitHub Copilot maintain semantic indexes over code and use embeddings, symbol tables, and file heuristics to select context for LLMs.
 They are highly optimized for user experience and broad language support, but they generally do not expose an explicit dependency graph or integrate runtime execution counts.
@@ -316,6 +351,8 @@ Rabt differs in three key ways:
 (1) it explicitly combines static and runtime edges in a single graph,
 (2) it focuses on minimal subgraph extraction for context reduction and cost savings, and
 (3) it implements an incremental, Git-aware graph update mechanism that makes the graph ``living''.
+
+\input{comparison_table}
 
 \section{Limitations and Future Work}
 

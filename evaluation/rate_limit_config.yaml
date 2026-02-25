@@ -1,0 +1,39 @@
+# Rate Limit Configuration for Gemini Free Tier
+# Documentation: https://ai.google.dev/gemini-api/docs/rate-limits
+
+# IMPORTANT: Check your actual limits at https://aistudio.google.com/rate-limit
+# Free tier limits vary by model but are typically very restricted:
+# Common limits: 2-15 RPM, 32,000 TPM, 1,500 RPD
+# We use CONSERVATIVE defaults to avoid hitting limits
+
+rate_limits:
+  # Delay between API calls (seconds)
+  # 15 seconds = 4 calls/minute (safe for even 5 RPM limits)
+  api_delay: 15.0
+  
+  # Maximum requests per benchmark run
+  # Set this based on your daily quota
+  max_requests_per_run: 50
+  
+  # Retry configuration for rate limit errors
+  retry:
+    max_attempts: 3
+    backoff_multiplier: 2  # 5s, 10s, 20s
+    
+  # Token limits (conservative estimate)
+  max_tokens_per_request: 100000  # Stay well under 1M TPM
+
+# Budget tracking
+daily_limits:
+  max_api_calls: 1500
+  max_cost_usd: 0.00  # Free tier
+  
+# Recommendation: Run benchmarks in batches
+# Batch 1: sample_repo + requests (4 queries) = ~20 seconds
+# Batch 2: flask (3 queries) = ~15 seconds
+# Batch 3: fastapi (3 queries) = ~15 seconds
+# Batch 4: pytest (3 queries) = ~15 seconds
+# Total: ~65 seconds = 13 API calls (well within limits)
+
+# For ablation study: No API calls needed!
+# Ablation only builds graphs and compares structure

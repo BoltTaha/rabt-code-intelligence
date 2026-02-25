@@ -7,6 +7,7 @@ Run: python -m evaluation.baseline_comparison --repo examples/sample_repo --quer
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parent.parent
@@ -82,7 +83,7 @@ Answer in one or two short sentences. Be precise."""
         return (f"(Error: {e})", {"prompt_tokens": None, "total_tokens": None})
 
 
-def run_baseline_comparison(repo_path: str, query: str, config_path: str | None = None) -> dict:
+def run_baseline_comparison(repo_path: str, query: str, config_path: str | None = None, rate_limit_delay: float = 15.0) -> dict:
     """
     Run the same query with (1) full repo context and (2) Rabt subgraph.
     Returns dict with context sizes, answers, and token counts when available.
@@ -97,9 +98,15 @@ def run_baseline_comparison(repo_path: str, query: str, config_path: str | None 
 
     # Full context
     full_context = _full_repo_context(repo_path)
+    print(f"⏳ Calling Gemini API (full context)...")
     full_answer, full_usage = _call_gemini_full_context(full_context, query, config)
 
+    # Rate limit delay before second API call
+    print(f"\n⏳ Waiting {rate_limit_delay}s for rate limit...")
+    time.sleep(rate_limit_delay)
+
     # Rabt (minimal subgraph)
+    print(f"⏳ Calling Gemini API (Rabt subgraph)...")
     result = run(repo_path=repo_path, query=query, config_path=config_path, persist=True)
     subgraph_text = result.get("subgraph_text", "") or "(empty)"
     rabt_answer = result.get("answer", "")

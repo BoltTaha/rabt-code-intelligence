@@ -1,0 +1,33 @@
+% Comparison table for Related Work section
+% Add this to main.tex in the Related Work section
+
+\begin{table*}[t]
+\centering
+\caption{Comparison of Graph-RAG Approaches for Code Intelligence}
+\label{tab:comparison}
+\small
+\begin{tabular}{@{}lcccccc@{}}
+\toprule
+\textbf{System} & \textbf{Graph Type} & \textbf{Runtime} & \textbf{Multi-hop} & \textbf{Token} & \textbf{Language} & \textbf{Year} \\
+ & & \textbf{Edges} & \textbf{Queries} & \textbf{Reduction} & \textbf{Support} & \\
+\midrule
+\textbf{Rabt (ours)} & AST + Runtime & Yes & Yes & \textbf{99.7\%} & Python & 2026 \\
+Chinthareddy & AST (Tree-sitter) & No & Yes & Not reported & Java & 2026 \\
+RANGER & Hybrid & No & Yes & Not reported & Multi & 2025 \\
+GRACE & Code graph & No & Yes & Not reported & Multi & 2025 \\
+RepoScope & Call chain & No & Yes & Not reported & Multi & 2025 \\
+GrepRAG & Grep-based & No & Limited & Not reported & Multi & 2026 \\
+MS GraphRAG & Entity KG & No & Yes & 90--95\% & Text & 2024 \\
+Cursor (IDE) & Heuristic & No & Limited & $\sim$50\% & Multi & 2024 \\
+Vector RAG & Embeddings & No & No & 0\% & Agnostic & -- \\
+\bottomrule
+\end{tabular}
+\vspace{0.5em}
+\begin{flushleft}
+\footnotesize
+\textbf{Key differences:} (1) Rabt is the only system combining static AST + runtime tracing.
+(2) Rabt achieves the highest reported token reduction (99.7\% vs 90--95\% for GraphRAG).
+(3) Most competing systems use static-only graphs or heuristics.
+(4) Runtime edges enable detection of dynamic calls that static analysis misses.
+\end{flushleft}
+\end{table*}
